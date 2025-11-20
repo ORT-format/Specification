@@ -1,6 +1,6 @@
 # ORT (Object Record Table) Format Specification
 
-Version: 1.0.1
+Version: 1.1.0
 Last Updated: 2025
 
 ## Table of Contents
@@ -18,6 +18,7 @@ Last Updated: 2025
 - [11. Complete Examples](#11-complete-examples)
 - [12. Parsing Rules](#12-parsing-rules)
 - [13. Best Practices](#13-best-practices)
+- [14. Changelog](#14-changelog)
 
 ---
 
@@ -515,7 +516,7 @@ Values are parsed in the following order:
 
 ### 7.3 Nested Object Values
 
-For fields defined with nested structure in header, values must be wrapped in parentheses.
+For fields defined with nested structure in header, values should be wrapped in parentheses.
 
 **Example**:
 ```ort
@@ -529,6 +530,8 @@ users:id,profile(name,age):
 users:id,profile(name,age):
 1,Alice,30  # WRONG: Not wrapped in parentheses
 ```
+
+**Note (v1.1.0+)**: The parser now supports dynamic field recognition. If a value doesn't match the expected nested format (e.g., an array `[...]` instead of an object `(...)`), the parser will treat it as a regular value instead of throwing an error. This allows for more flexible data structures while maintaining backward compatibility.
 
 ### 7.4 Multiple Data Lines
 
@@ -926,13 +929,24 @@ users:id,name,age:
 
 ### 12.4 Nested Object Validation
 
-**Rule**: For nested fields, values must be wrapped in parentheses and contain correct number of nested values.
+**Rule**: For nested fields, values should be wrapped in parentheses and contain correct number of nested values.
 
 **Example Error**:
 ```ort
 users:id,profile(name,age):
 1,(Alice)  # ERROR: Expected 2 nested values, got 1
 ```
+
+**Dynamic Field Recognition (v1.1.0+)**:
+
+When a nested field receives a value that doesn't match the expected format, the parser will attempt to parse it as a regular value:
+
+```ort
+users:id,profile(name,age):
+1,[x,y,z]  # Parsed as array instead of nested object
+```
+
+This behavior allows the parser to handle non-uniform data structures where the same field may contain different types across records. The generator will detect such non-uniform arrays and output them using inline object format instead of tabular format.
 
 ---
 
@@ -1108,6 +1122,63 @@ Implementations should provide clear error messages including:
 - [ORT GitHub Repository](https://github.com/ort-format/ORT)
 - [ORT Playground](https://ort-format.github.io/ORT-Playground/)
 - [TOON Format](https://github.com/toon-format/toon) - Inspiration for ORT
+
+---
+
+## 14. Changelog
+
+### Version 1.1.0
+
+**Release Date**: 2025
+
+#### New Features
+
+1. **Dynamic Field Recognition in Parser**
+   - Parser now handles cases where a field is defined as nested in the header but receives a different value type
+   - Arrays can now be parsed even when the header defines a nested object structure
+   - Fallback parsing for values that don't match the expected nested format
+
+2. **Improved Uniform Array Detection in Generator**
+   - Generator now checks both key names AND value types when determining if an array is uniform
+   - Arrays with same keys but different value types (e.g., object vs array) are now correctly identified as non-uniform
+   - Non-uniform arrays are generated using inline object format instead of tabular format
+
+#### Bug Fixes
+
+- Fixed parsing error "Expected nested object in parentheses" when array values appear in nested field positions
+- Fixed parsing error "Expected X values but got Y" for non-uniform object arrays
+
+#### Example
+
+**JSON with non-uniform array:**
+```json
+{
+  "test": [
+    { "input": { "pairs": [["a","b"],["c,d","e:f",true]] } },
+    { "input": ["x", "y", "true", true, 10] }
+  ]
+}
+```
+
+**Previous behavior (v1.0.1)**: Generated invalid ORT that couldn't be parsed back
+
+**New behavior (v1.1.0)**: Generates valid inline object format
+```ort
+test:
+[(input:(pairs:[[a,b],[c\,d,e:f,true]])),(input:[x,y,true,true,10])]
+```
+
+---
+
+### Version 1.0.1
+
+**Release Date**: 2025
+
+- Initial stable release
+- Full support for all data types (null, boolean, number, string, array, object)
+- Nested field syntax in headers
+- Escape sequence support
+- Multi-language implementations (Rust, TypeScript, Python)
 
 ---
 
